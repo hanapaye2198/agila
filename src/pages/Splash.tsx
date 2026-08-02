@@ -115,7 +115,7 @@ function InitStepRow({
   return (
     <li
       className={cn(
-        "flex items-center gap-3 rounded-2xl px-3 py-2.5 transition-all duration-400",
+        "flex items-center gap-3 rounded-2xl px-3 py-2.5 transition-all duration-300",
         status === "active" && "bg-navy-soft/70",
         status === "done" && "opacity-100",
         status === "pending" && "opacity-45",
@@ -183,7 +183,7 @@ function InitPhase({
       <div className="flex flex-1 flex-col justify-center py-4">
         <div
           className={cn(
-            "glass mx-auto w-full max-w-sm rounded-3xl p-5 shadow-lift transition-all duration-600 ease-out",
+            "glass mx-auto w-full max-w-sm rounded-3xl p-5 shadow-lift transition-all duration-500 ease-out",
             visible ? "translate-y-0 scale-100 opacity-100" : "translate-y-4 scale-[0.98] opacity-0",
           )}
         >
