@@ -56,3 +56,19 @@ agila/
 
 - Lovable’s original stack (TanStack Start, Bun, Nitro SSR) was replaced with a standard Vite SPA so it runs without Lovable-specific packages.
 - All data is mock data in `src/lib/agila-data.ts` for UI demos.
+
+## Backend integration
+
+Run the local development API in a second terminal with `npm run server`.
+
+The SPA expects an API under `/api` by default. Set `VITE_API_BASE_URL` when the API is hosted elsewhere; see `.env.example`.
+
+Authentication endpoints:
+
+- `POST /auth/login` with `{ email, password, remember }` returns `{ user, accessToken? }`.
+- `POST /auth/register` with the registration fields returns `{ user, accessToken? }`.
+- `POST /auth/forgot-password` with `{ email }`.
+- `GET /auth/me` returns `{ user }` using a cookie or bearer token.
+- `POST /auth/logout` invalidates the current session.
+
+Requests include credentials for cookie sessions. If `accessToken` is returned, it is kept in session storage and sent as a bearer token. The backend must still enforce authorization server-side; SPA route protection is only a UX safeguard.

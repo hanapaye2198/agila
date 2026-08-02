@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Check, Loader2 } from "lucide-react";
+import { useAuth } from "@/contexts/auth-context";
 
 import { AgilaLogo } from "@/components/agila/agila-logo";
 import { cn } from "@/lib/utils";
@@ -20,15 +21,6 @@ const INIT_STEPS = [
 
 type Phase = "splash" | "init";
 type StepStatus = "pending" | "active" | "done";
-
-/** UI-only mock — no backend. Toggle via localStorage key `agila_authenticated`. */
-function isAuthenticated(): boolean {
-  try {
-    return localStorage.getItem("agila_authenticated") === "true";
-  } catch {
-    return false;
-  }
-}
 
 function SplashBrand({ visible }: { visible: boolean }) {
   return (
@@ -238,6 +230,7 @@ function InitPhase({
 
 export default function SplashPage() {
   const navigate = useNavigate();
+  const { user, loading: authLoading } = useAuth();
   const [phase, setPhase] = useState<Phase>("splash");
   const [splashReady, setSplashReady] = useState(false);
   const [initVisible, setInitVisible] = useState(false);
@@ -279,14 +272,14 @@ export default function SplashPage() {
 
   // Navigate after checklist completes
   useEffect(() => {
-    if (phase !== "init" || completedCount < INIT_STEPS.length) return;
+    if (phase !== "init" || completedCount < INIT_STEPS.length || authLoading) return;
 
     const done = window.setTimeout(() => {
-      navigate(isAuthenticated() ? "/dashboard" : "/login", { replace: true });
+      navigate(user ? "/dashboard" : "/login", { replace: true });
     }, 450);
 
     return () => window.clearTimeout(done);
-  }, [phase, completedCount, navigate]);
+  }, [phase, completedCount, navigate, authLoading, user]);
 
   return (
     <div className="relative min-h-dvh overflow-hidden bg-background">

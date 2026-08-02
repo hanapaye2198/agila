@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { initials, school } from "@/lib/agila-data";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/contexts/auth-context";
 
 const tabs = [
   { label: "Home", to: "/dashboard", icon: LayoutDashboard },
@@ -44,6 +45,10 @@ export function AgilaMark({ className }: { className?: string }) {
 }
 
 function MoreSheet() {
+  const { signOut, user } = useAuth();
+  const displayName = user?.name ?? school.admin;
+  const displayRole = user?.role ?? school.role;
+  const displaySchool = user?.schoolName ?? school.name;
   return (
     <Sheet>
       <SheetTrigger asChild>
@@ -55,7 +60,7 @@ function MoreSheet() {
           <span className="grid size-9 place-items-center rounded-2xl">
             <Avatar className="size-7">
               <AvatarFallback className="bg-navy-soft text-[10px] text-primary">
-                {initials(school.admin)}
+                {initials(displayName)}
               </AvatarFallback>
             </Avatar>
           </span>
@@ -68,13 +73,13 @@ function MoreSheet() {
           <div className="flex items-center gap-3 rounded-2xl bg-navy-soft p-3">
             <Avatar className="size-11">
               <AvatarFallback className="bg-navy text-sm text-navy-foreground">
-                {initials(school.admin)}
+                {initials(displayName)}
               </AvatarFallback>
             </Avatar>
             <div className="min-w-0 flex-1">
-              <p className="truncate font-semibold">{school.admin}</p>
+              <p className="truncate font-semibold">{displayName}</p>
               <p className="truncate text-xs text-muted-foreground">
-                {school.role} · {school.name}
+                {displayRole} · {displaySchool}
               </p>
             </div>
           </div>
@@ -97,10 +102,8 @@ function MoreSheet() {
             ))}
           </div>
 
-          <Button asChild variant="outline" className="h-12 w-full rounded-2xl bg-surface">
-            <Link to="/login">
-              <LogOut className="size-4" /> Sign out
-            </Link>
+          <Button variant="outline" className="h-12 w-full rounded-2xl bg-surface" onClick={() => void signOut()}>
+            <LogOut className="size-4" /> Sign out
           </Button>
         </div>
       </SheetContent>
@@ -156,6 +159,9 @@ function BottomTabs() {
 }
 
 function DesktopSidebar() {
+  const { signOut, user } = useAuth();
+  const displayName = user?.name ?? school.admin;
+  const displayRole = user?.role ?? school.role;
   const pathname = useLocation().pathname;
   const items = [...tabs, ...moreNav];
 
@@ -198,17 +204,15 @@ function DesktopSidebar() {
       <div className="flex items-center gap-3 rounded-2xl border border-border/70 bg-card p-3">
         <Avatar className="size-9">
           <AvatarFallback className="bg-navy text-xs text-navy-foreground">
-            {initials(school.admin)}
+            {initials(displayName)}
           </AvatarFallback>
         </Avatar>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold">{school.admin}</p>
-          <p className="truncate text-[11px] text-muted-foreground">{school.role}</p>
+          <p className="truncate text-sm font-semibold">{displayName}</p>
+          <p className="truncate text-[11px] text-muted-foreground">{displayRole}</p>
         </div>
-        <Button asChild variant="ghost" size="icon" className="size-9 shrink-0 rounded-xl">
-          <Link to="/login" aria-label="Sign out">
-            <LogOut className="size-4" aria-hidden="true" />
-          </Link>
+        <Button variant="ghost" size="icon" className="size-9 shrink-0 rounded-xl" onClick={() => void signOut()} aria-label="Sign out">
+          <LogOut className="size-4" aria-hidden="true" />
         </Button>
       </div>
     </aside>
