@@ -7,7 +7,8 @@ type AuthContextValue = {
   loading: boolean;
   signIn: (email: string, password: string, remember: boolean) => Promise<void>;
   register: (payload: Record<string, string>) => Promise<void>;
-  requestPasswordReset: (email: string) => Promise<void>;
+  requestPasswordReset: (email: string) => Promise<{ resetToken?: string }>;
+  resetPassword: (token: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
 };
 
@@ -18,16 +19,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const controller = new AbortController();
     const handleAuthExpired = () => setUser(null);
     window.addEventListener("agila:auth-expired", handleAuthExpired);
 
     authApi
-      .session()
-      .then(({ user: currentUser }) => setUser(currentUser))
-      .catch(() => setUser(null))
-      .finally(() => setLoading(false));
+      .session(controller.signal)
+      .then(({ user: currentUser }) => { if (!controller.signal.aborted) setUser(currentUser); })
+      .catch(() => { if (!controller.signal.aborted) setUser(null); })
+      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
 
-    return () => window.removeEventListener("agila:auth-expired", handleAuthExpired);
+    return () => {
+      controller.abort();
+      window.removeEventListener("agila:auth-expired", handleAuthExpired);
+    };
   }, []);
 
   const value = useMemo<AuthContextValue>(
@@ -50,7 +55,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(response.user);
       },
       requestPasswordReset: async (email) => {
-        await authApi.requestPasswordReset(email);
+        return authApi.requestPasswordReset(email);
+      },
+      resetPassword: async (token, password) => {
+        await authApi.resetPassword(token, password);
       },
       signOut: async () => {
         try {

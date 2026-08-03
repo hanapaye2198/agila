@@ -162,6 +162,7 @@ function DesktopSidebar() {
   const { signOut, user } = useAuth();
   const displayName = user?.name ?? school.admin;
   const displayRole = user?.role ?? school.role;
+  const displaySchool = user?.schoolName ?? school.name;
   const pathname = useLocation().pathname;
   const items = [...tabs, ...moreNav];
 
@@ -171,7 +172,7 @@ function DesktopSidebar() {
         <AgilaMark />
         <span className="min-w-0">
           <span className="block font-display text-sm font-bold leading-tight">AGILA</span>
-          <span className="block truncate text-[11px] text-muted-foreground">{school.name}</span>
+          <span className="block truncate text-[11px] text-muted-foreground">{displaySchool}</span>
         </span>
       </Link>
 

@@ -7,6 +7,7 @@ import Landing from "@/pages/Landing";
 import Login from "@/pages/Login";
 import Notifications from "@/pages/Notifications";
 import Register from "@/pages/Register";
+import ResetPassword from "@/pages/ResetPassword";
 import Reports from "@/pages/Reports";
 import Scanner from "@/pages/Scanner";
 import Settings from "@/pages/Settings";
@@ -14,6 +15,7 @@ import Splash from "@/pages/Splash";
 import Students from "@/pages/Students";
 import Teachers from "@/pages/Teachers";
 import { AuthProvider } from "@/contexts/auth-context";
+import { GuestRoute } from "@/components/auth/guest-route";
 import { ProtectedRoute } from "@/components/auth/protected-route";
 
 function NotFound() {
@@ -46,9 +48,12 @@ export default function App() {
         <Route path="/" element={<Splash />} />
         <Route path="/welcome" element={<Landing />} />
         <Route path="/splash" element={<Splash />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
-        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
+          <Route element={<GuestRoute />}>
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+          </Route>
           <Route element={<ProtectedRoute />}>
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/attendance" element={<Attendance />} />

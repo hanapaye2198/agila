@@ -8,12 +8,19 @@ export type RequestOptions = Omit<RequestInit, "body"> & {
 };
 
 export function clearStoredToken() {
-  sessionStorage.removeItem("agila_access_token");
-  localStorage.removeItem("agila_access_token");
+  if (typeof sessionStorage !== "undefined") sessionStorage.removeItem("agila_access_token");
+  if (typeof localStorage !== "undefined") localStorage.removeItem("agila_access_token");
 }
 
 function getStoredToken() {
-  return sessionStorage.getItem("agila_access_token") ?? localStorage.getItem("agila_access_token");
+  return (typeof sessionStorage !== "undefined" ? sessionStorage.getItem("agila_access_token") : null)
+    ?? (typeof localStorage !== "undefined" ? localStorage.getItem("agila_access_token") : null);
+}
+
+function abortError() {
+  const error = new Error("The request timed out or was cancelled.") as ApiError;
+  error.code = "REQUEST_ABORTED";
+  return error;
 }
 
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
@@ -25,29 +32,34 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   if (options.body !== undefined) headers.set("Content-Type", "application/json");
   if (token) headers.set("Authorization", `Bearer ${token}`);
 
+  if (signal?.aborted) throw abortError();
+
   const controller = new AbortController();
-  const timer = window.setTimeout(() => controller.abort(), timeoutMs);
-  if (signal) signal.addEventListener("abort", () => controller.abort(), { once: true });
+  const timer = globalThis.setTimeout(() => controller.abort(), timeoutMs);
+  const abortHandler = () => controller.abort();
+  signal?.addEventListener("abort", abortHandler, { once: true });
 
   let response: Response;
   try {
     response = await fetch(`${API_BASE_URL}${path}`, {
-    ...requestOptions,
-    body: options.body === undefined ? undefined : JSON.stringify(options.body),
-    credentials: "include",
-    headers,
-    signal: controller.signal,
+      ...requestOptions,
+      body: options.body === undefined ? undefined : JSON.stringify(options.body),
+      credentials: "include",
+      headers,
+      signal: controller.signal,
     });
   } catch (cause) {
-    if (cause instanceof DOMException && cause.name === "AbortError") {
-      const error = new Error("The request timed out or was cancelled.") as ApiError;
-      error.code = "REQUEST_ABORTED";
-      throw error;
-    }
-    throw cause;
+    if (cause instanceof DOMException && cause.name === "AbortError") throw abortError();
+    const error = new Error("Unable to reach the server. Check your connection and try again.") as ApiError;
+    error.code = "NETWORK_ERROR";
+    error.details = cause;
+    throw error;
   } finally {
-    window.clearTimeout(timer);
+    globalThis.clearTimeout(timer);
+    signal?.removeEventListener("abort", abortHandler);
   }
+
+  if (response.status === 204) return undefined as T;
 
   const contentType = response.headers.get("content-type") ?? "";
   let payload: unknown;
@@ -60,7 +72,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   if (!response.ok) {
     if (response.status === 401) {
       clearStoredToken();
-      window.dispatchEvent(new Event("agila:auth-expired"));
+      if (typeof window !== "undefined") window.dispatchEvent(new Event("agila:auth-expired"));
     }
     const message = typeof payload === "object" && payload && "message" in payload
       ? String(payload.message)
@@ -99,10 +111,15 @@ export const authApi = {
   register: (payload: Record<string, string>) =>
     apiRequest<AuthResponse>("/auth/register", { method: "POST", body: payload }),
   requestPasswordReset: (email: string) =>
-    apiRequest<{ message?: string }>("/auth/forgot-password", {
+    apiRequest<{ message?: string; resetToken?: string }>("/auth/forgot-password", {
       method: "POST",
       body: { email },
     }),
-  session: () => apiRequest<{ user: AuthUser }>("/auth/me"),
+  resetPassword: (token: string, password: string) =>
+    apiRequest<void>("/auth/reset-password", {
+      method: "POST",
+      body: { token, password },
+    }),
+  session: (signal?: AbortSignal) => apiRequest<{ user: AuthUser }>("/auth/me", { signal }),
   logout: () => apiRequest<void>("/auth/logout", { method: "POST" }),
 };

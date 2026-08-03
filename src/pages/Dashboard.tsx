@@ -34,6 +34,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+import { useAuth } from "@/contexts/auth-context";
 import {
   gradeBreakdown,
   monthlyRate,
@@ -64,10 +65,14 @@ const tooltipStyle = {
 };
 
 export default function DashboardPage() {
+  const { user } = useAuth();
+  const firstName = user?.name?.split(" ")[0] ?? "there";
+  const schoolName = user?.schoolName ?? "your school";
+
   return (
     <AppShell
-      title="Good morning, Marisol"
-      description="Friday, July 31, 2026 · Attendance window closed at 8:00 AM"
+      title={`Good morning, ${firstName}`}
+      description={`${schoolName} · Attendance workspace`}
       actions={
         <>
           <Button variant="outline" className="rounded-xl bg-surface">

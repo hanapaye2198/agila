@@ -12,6 +12,7 @@ export default function ForgotPasswordPage() {
   const { requestPasswordReset } = useAuth();
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState("");
+  const [resetToken, setResetToken] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -21,7 +22,8 @@ export default function ForgotPasswordPage() {
     setError("");
     setSubmitting(true);
     try {
-      await requestPasswordReset(email);
+      const result = await requestPasswordReset(email);
+      setResetToken(result.resetToken ?? "");
       setMessage("If the email is registered, a reset link has been sent.");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to request a reset link.");
@@ -50,6 +52,7 @@ export default function ForgotPasswordPage() {
           <Input id="recover-email" value={email} onChange={(e) => setEmail(e.target.value)} required type="email" placeholder="m.duran@northgate.edu.ph" className="h-11 rounded-xl" />
         </div>
         {message ? <p role="status" className="text-sm text-accent-foreground">{message}</p> : null}
+        {resetToken ? <Link to={`/reset-password?token=${encodeURIComponent(resetToken)}`} className="block text-sm font-semibold text-primary hover:underline">Open development reset link</Link> : null}
         {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
         <Button disabled={submitting} className="h-11 w-full rounded-xl" type="submit">{submitting ? "Sending…" : "Send reset link"}</Button>
         <div className="flex items-start gap-3 rounded-2xl bg-emerald-soft p-4 text-sm text-accent-foreground">

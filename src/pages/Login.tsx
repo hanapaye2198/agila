@@ -12,6 +12,7 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { signIn } = useAuth();
+  const notice = (location.state as { notice?: string } | null)?.notice ?? "";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(false);
@@ -48,6 +49,7 @@ export default function LoginPage() {
       }
     >
       <form className="space-y-5" onSubmit={handleSubmit}>
+        {notice ? <p role="status" className="rounded-2xl bg-emerald-soft p-3 text-sm text-accent-foreground">{notice}</p> : null}
         <div className="space-y-2">
           <Label htmlFor="email">School email</Label>
           <Input id="email" value={email} onChange={(e) => setEmail(e.target.value)} required type="email" placeholder="m.duran@northgate.edu.ph" className="h-11 rounded-xl" />
