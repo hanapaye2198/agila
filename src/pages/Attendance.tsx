@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { CalendarDays, ChevronRight, Download, Send, SlidersHorizontal } from "lucide-react";
 
 import { AppShell } from "@/components/agila/app-shell";
@@ -15,6 +15,8 @@ import {
 } from "@/components/ui/drawer";
 import type { AttendanceStatus } from "@/lib/agila-data";
 import { initials, recentAttendance, statusStyles } from "@/lib/agila-data";
+import { dashboardApi } from "@/lib/dashboard-api";
+import { workspaceApi } from "@/lib/workspace-api";
 
 const timeline = [
   { window: "6:00 – 6:30 AM", count: 214, share: 15 },
@@ -28,7 +30,7 @@ const statusOrder: Record<AttendanceStatus, number> = { absent: 0, late: 1, excu
 const grades = ["All grades", "Grade 7", "Grade 8", "Grade 9", "Grade 10", "Grade 11", "Grade 12"];
 const gates = ["All gates", "Main Gate", "East Gate", "Annex Gate", "Gym Entrance"];
 
-const summary = [
+const summaryFallback = [
   { key: "present", label: "Present", value: "1,371", tone: "text-emerald" },
   { key: "late", label: "Late", value: "63", tone: "text-amber" },
   { key: "absent", label: "Absent", value: "33", tone: "text-destructive" },
@@ -46,27 +48,55 @@ export default function AttendancePage() {
   const [tab, setTab] = useState<"all" | "late" | "absent">("all");
   const [grade, setGrade] = useState(grades[0]);
   const [gate, setGate] = useState(gates[0]);
+  const [liveRecords, setLiveRecords] = useState<typeof recentAttendance>();
+  const [liveSummary, setLiveSummary] = useState<{ present: number; late: number; absent: number; excused: number; enrolled: number }>();
+  const [actionMessage, setActionMessage] = useState("");
 
-  const rows = [...recentAttendance]
+  const exportRegister = async () => {
+    try {
+      const { report, csv } = await workspaceApi.createReport({ type: "Daily summary", scope: grade, period: "Today" });
+      const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" })); const link = document.createElement("a"); link.href = url; link.download = `${report.name}.csv`; link.click(); URL.revokeObjectURL(url);
+      setActionMessage("Attendance register exported.");
+    } catch (error) { setActionMessage(error instanceof Error ? error.message : "Unable to export register"); }
+  };
+  const notify = async () => { try { await workspaceApi.createNotification({ title: "Attendance notification requested", body: `Attendance notice queued for ${rows.length} filtered learner records.`, type: "info" }); setActionMessage("Notification request recorded."); } catch (error) { setActionMessage(error instanceof Error ? error.message : "Unable to queue notification"); } };
+
+  useEffect(() => {
+    void dashboardApi.summary().then((result) => {
+      setLiveRecords(result.recent);
+      setLiveSummary({ enrolled: result.stats.enrolled, present: result.statusSplit.find((item) => item.key === "present")?.value ?? 0, late: result.stats.late, absent: result.statusSplit.find((item) => item.key === "absent")?.value ?? 0, excused: result.statusSplit.find((item) => item.key === "excused")?.value ?? 0 });
+    }).catch(() => undefined);
+  }, []);
+  const records = liveRecords ?? recentAttendance;
+  const summary = liveSummary ? [
+    { key: "present", label: "Present", value: liveSummary.present.toLocaleString(), tone: "text-emerald" },
+    { key: "late", label: "Late", value: liveSummary.late.toLocaleString(), tone: "text-amber" },
+    { key: "absent", label: "Absent", value: liveSummary.absent.toLocaleString(), tone: "text-destructive" },
+    { key: "excused", label: "Excused", value: liveSummary.excused.toLocaleString(), tone: "text-primary" },
+  ] : summaryFallback;
+
+  const rows = [...records]
     .filter((r) => (tab === "all" ? true : r.status === tab))
+    .filter((r) => grade === "All grades" || r.gradeSection.startsWith(grade))
+    .filter((r) => gate === "All gates" || r.gate === gate)
     .sort((a, b) => statusOrder[a.status] - statusOrder[b.status] || a.student.localeCompare(b.student));
 
   const tabs = [
-    { key: "all" as const, label: "All", count: recentAttendance.length },
-    { key: "late" as const, label: "Late", count: recentAttendance.filter((r) => r.status === "late").length },
-    { key: "absent" as const, label: "Absent", count: recentAttendance.filter((r) => r.status === "absent").length },
+    { key: "all" as const, label: "All", count: records.length },
+    { key: "late" as const, label: "Late", count: records.filter((r) => r.status === "late").length },
+    { key: "absent" as const, label: "Absent", count: records.filter((r) => r.status === "absent").length },
   ];
 
   return (
     <AppShell
       title="Attendance"
-      description="Fri, Jul 31 · Locked 8:00 AM"
+      description={`${liveSummary?.enrolled.toLocaleString() ?? "—"} enrolled learners · live register`}
       actions={
         <>
-          <Button variant="outline" className="h-11 rounded-full bg-surface">
+          <Button variant="outline" className="h-11 rounded-full bg-surface" onClick={() => void exportRegister()}>
             <Download className="size-4" aria-hidden="true" /> Export
           </Button>
-          <Button className="h-11 rounded-full">
+          <Button className="h-11 rounded-full" onClick={() => void notify()}>
             <Send className="size-4" aria-hidden="true" /> Notify
           </Button>
         </>
@@ -78,7 +108,7 @@ export default function AttendancePage() {
           <div className="flex items-center justify-between gap-3 border-b border-border/60 px-4 py-3">
             <div className="min-w-0">
               <p className="truncate text-[11px] uppercase tracking-wide text-muted-foreground">Attendance rate</p>
-              <p className="font-display text-2xl font-bold leading-tight">92.5%</p>
+              <p className="font-display text-2xl font-bold leading-tight">{liveSummary ? `${((liveSummary.present / Math.max(1, liveSummary.enrolled)) * 100).toFixed(1)}%` : "92.5%"}</p>
             </div>
             <Button variant="outline" className="h-10 shrink-0 rounded-full bg-surface text-xs">
               <CalendarDays className="size-4" aria-hidden="true" /> Jul 31
@@ -94,6 +124,7 @@ export default function AttendancePage() {
           </div>
         </CardContent>
       </Card>
+      {actionMessage && <p className="text-sm text-muted-foreground">{actionMessage}</p>}
 
       <div className="space-y-4 lg:grid lg:grid-cols-2 lg:items-start lg:gap-4 lg:space-y-0">
         <div className="space-y-3">

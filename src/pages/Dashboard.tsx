@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   Bell,
@@ -35,6 +36,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { useAuth } from "@/contexts/auth-context";
+import { dashboardApi } from "@/lib/dashboard-api";
 import {
   gradeBreakdown,
   monthlyRate,
@@ -66,8 +68,20 @@ const tooltipStyle = {
 
 export default function DashboardPage() {
   const { user } = useAuth();
+  const [summary, setSummary] = useState<Awaited<ReturnType<typeof dashboardApi.summary>> | undefined>();
   const firstName = user?.name?.split(" ")[0] ?? "there";
   const schoolName = user?.schoolName ?? "your school";
+  useEffect(() => { void dashboardApi.summary().then(setSummary).catch(() => undefined); }, []);
+  const dashboardStats = summary ? [
+    { label: "Total students", value: summary.stats.enrolled.toLocaleString(), delta: "live", trend: "up" as const, hint: "from directory" },
+    { label: "Present today", value: summary.stats.present.toLocaleString(), delta: "live", trend: "up" as const, hint: "attendance scans" },
+    { label: "Late arrivals", value: summary.stats.late.toLocaleString(), delta: "live", trend: "flat" as const, hint: "attendance scans" },
+    { label: "Guardians notified", value: summary.stats.guardiansNotified.toLocaleString(), delta: "live", trend: "flat" as const, hint: "today" },
+  ] : statCards;
+  const liveWeekly = summary?.weekly ?? weeklyAttendance;
+  const liveStatus = summary?.statusSplit ?? statusSplit;
+  const liveRecent = summary?.recent ?? recentAttendance;
+  const liveGrades = summary?.gradeBreakdown ?? gradeBreakdown;
 
   return (
     <AppShell
@@ -75,8 +89,8 @@ export default function DashboardPage() {
       description={`${schoolName} · Attendance workspace`}
       actions={
         <>
-          <Button variant="outline" className="rounded-xl bg-surface">
-            <Download className="size-4" /> Export
+          <Button asChild variant="outline" className="rounded-xl bg-surface">
+            <Link to="/reports"><Download className="size-4" /> Export</Link>
           </Button>
           <Button asChild className="rounded-xl">
             <Link to="/scanner">
@@ -87,7 +101,7 @@ export default function DashboardPage() {
       }
     >
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {statCards.map((s, i) => (
+        {dashboardStats.map((s, i) => (
           <StatCard key={s.label} {...s} icon={statIcons[i]} />
         ))}
       </div>
@@ -103,7 +117,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent className="h-56 pl-0">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={weeklyAttendance} barGap={4}>
+              <BarChart data={liveWeekly} barGap={4}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
                 <XAxis dataKey="day" tickLine={false} axisLine={false} fontSize={12} stroke="var(--muted-foreground)" />
                 <YAxis tickLine={false} axisLine={false} fontSize={12} stroke="var(--muted-foreground)" width={44} />
@@ -119,14 +133,14 @@ export default function DashboardPage() {
         <Card className="rounded-2xl border-border/70 shadow-card">
           <CardHeader>
             <CardTitle className="font-display text-base">Today's status split</CardTitle>
-            <p className="text-xs text-muted-foreground">1,482 enrolled learners</p>
+            <p className="text-xs text-muted-foreground">{(summary?.stats.enrolled ?? 1482).toLocaleString()} enrolled learners</p>
           </CardHeader>
           <CardContent>
             <div className="h-48">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
-                    data={statusSplit}
+                    data={liveStatus}
                     dataKey="value"
                     nameKey="name"
                     innerRadius={54}
@@ -134,7 +148,7 @@ export default function DashboardPage() {
                     paddingAngle={3}
                     stroke="none"
                   >
-                    {statusSplit.map((entry, i) => (
+                    {liveStatus.map((entry, i) => (
                       <Cell key={entry.key} fill={pieColors[i]} />
                     ))}
                   </Pie>
@@ -143,7 +157,7 @@ export default function DashboardPage() {
               </ResponsiveContainer>
             </div>
             <ul className="mt-2 space-y-2">
-              {statusSplit.map((s, i) => (
+              {liveStatus.map((s, i) => (
                 <li key={s.key} className="flex items-center gap-2 text-sm">
                   <span className="size-2.5 rounded-full" style={{ background: pieColors[i] }} />
                   <span className="text-muted-foreground">{s.name}</span>
@@ -204,8 +218,8 @@ export default function DashboardPage() {
             ))}
             <div className="col-span-2 rounded-2xl bg-navy p-4 text-navy-foreground">
               <p className="text-xs opacity-70">Guardian reach</p>
-              <p className="mt-1 font-display text-2xl font-bold">98.2%</p>
-              <Progress value={98} className="mt-3 h-1.5 bg-white/20" />
+              <p className="mt-1 font-display text-2xl font-bold">{summary?.stats.guardianReach ?? 98.2}%</p>
+              <Progress value={summary?.stats.guardianReach ?? 98.2} className="mt-3 h-1.5 bg-white/20" />
             </div>
           </CardContent>
         </Card>
@@ -220,7 +234,7 @@ export default function DashboardPage() {
             </Button>
           </CardHeader>
           <CardContent className="space-y-2">
-            {recentAttendance.slice(0, 6).map((r) => (
+            {liveRecent.slice(0, 6).map((r) => (
               <div key={r.id} className="flex items-center gap-3 rounded-2xl border border-border/70 bg-surface p-3">
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold">{r.student}</p>
@@ -278,7 +292,7 @@ export default function DashboardPage() {
         </CardHeader>
         <CardContent className="h-56 pl-0">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={gradeBreakdown} layout="vertical" margin={{ left: 12 }}>
+            <BarChart data={liveGrades} layout="vertical" margin={{ left: 12 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
               <XAxis type="number" domain={[80, 100]} tickLine={false} axisLine={false} fontSize={12} stroke="var(--muted-foreground)" />
               <YAxis type="category" dataKey="grade" tickLine={false} axisLine={false} fontSize={12} width={80} stroke="var(--muted-foreground)" />

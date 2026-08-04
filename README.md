@@ -72,3 +72,19 @@ Authentication endpoints:
 - `POST /auth/logout` invalidates the current session.
 
 Requests include credentials for cookie sessions. If `accessToken` is returned, it is kept in session storage and sent as a bearer token. The backend must still enforce authorization server-side; SPA route protection is only a UX safeguard.
+
+## Deploy to Render (free instance)
+
+The included `render.yaml` deploys the frontend and API together as one Render web service. Push the repository, then create a Blueprint in Render from the repository. Render runs `npm ci && npm run build`, starts with `npm start`, and checks `/api/health`.
+
+Free Render web services spin down after idle time and have an ephemeral filesystem. This project currently stores data in `server/data.json`, so records reset after a restart, deploy, or spin-down. Use a managed database before storing real school records. [Render's free-instance limitations](https://render.com/docs/free) explain the constraint.
+
+## Android APK
+
+Capacitor is configured with app ID `com.agila.attendance`. Copy `.env.android.example` to `.env.android`, set `VITE_API_BASE_URL` to the deployed Render service URL plus `/api`, then run:
+
+```bash
+npm run android:apk
+```
+
+The generated APK is at `android/app/build/outputs/apk/release/`. To produce a signed release APK, set `AGILA_KEYSTORE_PATH`, `AGILA_KEYSTORE_PASSWORD`, `AGILA_KEY_ALIAS`, and `AGILA_KEY_PASSWORD` before running the command. Keystore files and `.env.android` are ignored by Git.

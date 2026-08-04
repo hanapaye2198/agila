@@ -1,6 +1,6 @@
 
-import { useEffect, useState } from "react";
-import { CheckCircle2, Keyboard, RefreshCw, ScanLine, Wifi } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Camera, CameraOff, CheckCircle2, Keyboard, RefreshCw, ScanLine, Wifi } from "lucide-react";
 
 import { AppShell } from "@/components/agila/app-shell";
 import { Badge } from "@/components/ui/badge";
@@ -20,6 +20,13 @@ import { initials, statusStyles } from "@/lib/agila-data";
 import { attendanceApi, type RecentScan, type ScanSessionType, type ScannerDevice } from "@/lib/attendance-api";
 
 type ActiveSession = { id: string; gateId: string; sessionType: ScanSessionType };
+type DetectedBarcode = { rawValue?: string };
+type BarcodeDetectorInstance = { detect: (source: HTMLVideoElement) => Promise<DetectedBarcode[]> };
+type BarcodeDetectorConstructor = new (options?: { formats?: string[] }) => BarcodeDetectorInstance;
+
+declare global {
+  interface Window { BarcodeDetector?: BarcodeDetectorConstructor }
+}
 
 function errorCode(cause: unknown) {
   return cause && typeof cause === "object" && "code" in cause ? String(cause.code) : "";
@@ -45,6 +52,14 @@ export default function ScannerPage() {
   const [devices, setDevices] = useState<ScannerDevice[]>([]);
   const [scanFeed, setScanFeed] = useState<RecentScan[]>([]);
   const [scanCount, setScanCount] = useState(0);
+  const [cameraActive, setCameraActive] = useState(false);
+  const [cameraError, setCameraError] = useState("");
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const detectorRef = useRef<BarcodeDetectorInstance | null>(null);
+  const scanInFlight = useRef(false);
+  const frameRef = useRef<number | undefined>(undefined);
+  const recentCameraCodes = useRef(new Map<string, number>());
   const selectedDevice = devices.find((device) => device.id === (session?.gateId ?? gateId));
 
   useEffect(() => {
@@ -62,6 +77,60 @@ export default function ScannerPage() {
       });
     return () => controller.abort();
   }, []);
+
+  useEffect(() => () => stopCamera(), []);
+
+  function stopCamera() {
+    if (frameRef.current) cancelAnimationFrame(frameRef.current);
+    frameRef.current = undefined;
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+    detectorRef.current = null;
+    if (videoRef.current) videoRef.current.srcObject = null;
+    setCameraActive(false);
+  }
+
+  async function startCamera() {
+    if (!session) { setError("Start a scanner session before opening the camera."); return; }
+    if (!navigator.mediaDevices?.getUserMedia) { setCameraError("This browser does not support camera access."); return; }
+    if (!window.BarcodeDetector) { setCameraError("QR detection is unavailable in this browser. Use Chrome or Edge, or enter the LRN manually."); return; }
+    setCameraError(""); setError("");
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
+      streamRef.current = stream;
+      detectorRef.current = new window.BarcodeDetector({ formats: ["qr_code"] });
+      if (!videoRef.current) throw new Error("Camera preview is unavailable.");
+      videoRef.current.srcObject = stream;
+      await videoRef.current.play();
+      setCameraActive(true);
+      void scanCameraFrame();
+    } catch (cause) {
+      stopCamera();
+      setCameraError(cause instanceof Error ? `Camera unavailable: ${cause.message}` : "Camera permission was denied or unavailable.");
+    }
+  }
+
+  async function scanCameraFrame() {
+    const video = videoRef.current; const detector = detectorRef.current;
+    if (!video || !detector || !streamRef.current) return;
+    try {
+      if (!scanInFlight.current && video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+        const [code] = await detector.detect(video);
+        const value = code?.rawValue?.trim();
+        const lastSeen = value ? recentCameraCodes.current.get(value) : undefined;
+        if (value && (!lastSeen || Date.now() - lastSeen > 30_000)) {
+          scanInFlight.current = true;
+          recentCameraCodes.current.set(value, Date.now());
+          setIdentifier(value);
+          await logScan(value);
+          scanInFlight.current = false;
+        }
+      }
+    } catch (cause) {
+      setCameraError(cause instanceof Error ? cause.message : "QR detection failed.");
+    }
+    if (streamRef.current) frameRef.current = requestAnimationFrame(() => void scanCameraFrame());
+  }
 
   async function startSession() {
     const device = devices.find((item) => item.id === gateId);
@@ -94,6 +163,7 @@ export default function ScannerPage() {
     setBusy(true); setError(""); setMessage("");
     try {
       await attendanceApi.endScannerSession(session.id);
+      stopCamera();
       setSession(undefined);
       setMessage("Scanner session ended.");
     } catch (cause) {
@@ -107,9 +177,9 @@ export default function ScannerPage() {
     finally { setBusy(false); }
   }
 
-  async function logScan() {
+  async function logScan(scannedIdentifier = identifier) {
     if (!session) { setError("Start a scanner session before logging a scan."); return; }
-    const trimmed = identifier.trim();
+    const trimmed = scannedIdentifier.trim();
     if (!trimmed) { setError("Enter a learner identifier first."); return; }
     setBusy(true); setError(""); setMessage("");
     try {
@@ -160,14 +230,15 @@ export default function ScannerPage() {
         <Card className="mesh-bg overflow-hidden rounded-3xl border-border/70 shadow-card">
           <CardContent className="p-6 sm:p-8">
             <div className="mx-auto max-w-md">
-              <div className="glass relative aspect-square w-full overflow-hidden rounded-3xl">
+              <div className="glass relative aspect-square w-full overflow-hidden rounded-3xl bg-black">
+                <video ref={videoRef} playsInline muted className={`absolute inset-0 size-full object-cover ${cameraActive ? "block" : "hidden"}`} />
                 <div className="grid-lines absolute inset-0 opacity-70" />
                 <div className="absolute inset-8 rounded-2xl border-2 border-dashed border-emerald/40" />
                 {["left-6 top-6 border-l-4 border-t-4 rounded-tl-xl", "right-6 top-6 border-r-4 border-t-4 rounded-tr-xl", "left-6 bottom-6 border-b-4 border-l-4 rounded-bl-xl", "right-6 bottom-6 border-b-4 border-r-4 rounded-br-xl"].map((pos) => (
                   <span key={pos} className={`absolute size-12 border-emerald ${pos}`} />
                 ))}
                 <span className="absolute inset-x-10 top-1/2 h-0.5 animate-pulse bg-emerald" />
-                <div className="absolute inset-0 grid place-items-center">
+                <div className={`absolute inset-0 grid place-items-center ${cameraActive ? "pointer-events-none bg-black/20" : ""}`}>
                   <div className="text-center">
                     <ScanLine className="mx-auto size-10 text-emerald" />
                     <p className="mt-3 font-display text-lg font-semibold">Align QR inside the frame</p>
@@ -175,6 +246,12 @@ export default function ScannerPage() {
                   </div>
                 </div>
               </div>
+
+              <div className="mt-4 flex gap-2">
+                <Button type="button" variant="outline" disabled={busy || !session || cameraActive} onClick={() => void startCamera()} className="flex-1 rounded-xl bg-surface"><Camera className="size-4" /> Open camera</Button>
+                <Button type="button" variant="outline" disabled={!cameraActive} onClick={stopCamera} className="rounded-xl bg-surface"><CameraOff className="size-4" /> Stop</Button>
+              </div>
+              {cameraError ? <p role="alert" className="mt-2 text-xs text-destructive">{cameraError}</p> : null}
 
               <div className="mt-6 space-y-4">
                 <div className="grid gap-3">
