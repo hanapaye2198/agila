@@ -663,8 +663,8 @@ const server = createServer((request, response) => {
   });
 });
 
-server.listen(port, () => {
-  console.log(`AGILA API listening on http://localhost:${port}`);
+server.listen(port, "0.0.0.0", () => {
+  console.log(`AGILA API listening on http://0.0.0.0:${port}`);
   if (!isProduction) console.log("Demo login: m.duran@northgate.edu.ph / DemoPassword123!");
 });
 
