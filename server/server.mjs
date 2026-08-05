@@ -9,7 +9,7 @@ const scrypt = promisify(scryptCallback);
 const dataFile = process.env.DATA_FILE ?? fileURLToPath(new URL("./data.json", import.meta.url));
 const distDirectory = fileURLToPath(new URL("../dist/", import.meta.url));
 const port = Number(process.env.PORT ?? 3000);
-const allowedOrigins = (process.env.CORS_ORIGIN ?? "http://localhost:5173,http://127.0.0.1:5173,capacitor://localhost").split(",").map((origin) => origin.trim()).filter(Boolean);
+const allowedOrigins = (process.env.CORS_ORIGIN ?? "http://localhost:5173,http://127.0.0.1:5173,https://localhost,capacitor://localhost").split(",").map((origin) => origin.trim()).filter(Boolean);
 const isProduction = process.env.NODE_ENV === "production";
 const exposeResetToken = !isProduction && process.env.EXPOSE_RESET_TOKEN === "true";
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
