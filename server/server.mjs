@@ -9,7 +9,7 @@ const scrypt = promisify(scryptCallback);
 const dataFile = process.env.DATA_FILE ?? fileURLToPath(new URL("./data.json", import.meta.url));
 const distDirectory = fileURLToPath(new URL("../dist/", import.meta.url));
 const port = Number(process.env.PORT ?? 3000);
-const allowedOrigins = (process.env.CORS_ORIGIN ?? "http://localhost:5173,http://127.0.0.1:5173").split(",").map((origin) => origin.trim()).filter(Boolean);
+const allowedOrigins = (process.env.CORS_ORIGIN ?? "http://localhost:5173,http://127.0.0.1:5173,capacitor://localhost").split(",").map((origin) => origin.trim()).filter(Boolean);
 const isProduction = process.env.NODE_ENV === "production";
 const exposeResetToken = !isProduction && process.env.EXPOSE_RESET_TOKEN === "true";
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -101,7 +101,7 @@ function send(response, status, body, headers = {}) {
     "Access-Control-Allow-Credentials": "true",
     "Access-Control-Allow-Headers": "Content-Type, Authorization",
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-    ...(allowedOrigins.length === 1 ? { "Access-Control-Allow-Origin": allowedOrigins[0] } : {}),
+    ...(response.agilaCorsOrigin ? { "Access-Control-Allow-Origin": response.agilaCorsOrigin, Vary: "Origin" } : {}),
     "Content-Type": "application/json; charset=utf-8",
     ...headers,
   });
@@ -293,11 +293,12 @@ function usersByEmail(email) {
 }
 
 async function handle(request, response) {
-  if (request.method === "OPTIONS") return send(response, 204);
   const url = new URL(request.url, `http://${request.headers.host ?? "localhost"}`);
   const origin = request.headers.origin;
   const sameOrigin = origin === `${url.protocol}//${request.headers.host}`;
   if (origin && !sameOrigin && !allowedOrigins.includes(origin)) return fail(response, 403, "Origin is not allowed", "ORIGIN_FORBIDDEN");
+  if (origin && allowedOrigins.includes(origin)) response.agilaCorsOrigin = origin;
+  if (request.method === "OPTIONS") return send(response, 204);
   if (!url.pathname.startsWith("/api")) return serveClient(request, response, url.pathname);
   const path = url.pathname.replace(/^\/api(?=\/|$)/, "") || "/";
 

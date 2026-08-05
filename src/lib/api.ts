@@ -1,6 +1,12 @@
 export type ApiError = Error & { status?: number; code?: string; details?: unknown };
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "/api").replace(/\/$/, "");
+// Render free instances can take roughly a minute to wake after inactivity.
+// Deployments can override this without changing application code.
+const configuredTimeoutMs = Number(import.meta.env.VITE_API_TIMEOUT_MS ?? 70_000);
+const DEFAULT_REQUEST_TIMEOUT_MS = Number.isFinite(configuredTimeoutMs) && configuredTimeoutMs > 0
+  ? configuredTimeoutMs
+  : 70_000;
 
 export type RequestOptions = Omit<RequestInit, "body"> & {
   body?: unknown;
@@ -24,7 +30,7 @@ function abortError() {
 }
 
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { timeoutMs = 15_000, signal, ...requestOptions } = options;
+  const { timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS, signal, ...requestOptions } = options;
   const token = getStoredToken();
   const headers = new Headers(options.headers);
   headers.set("Accept", "application/json");
