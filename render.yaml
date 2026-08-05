@@ -7,3 +7,6 @@ services:
     startCommand: NODE_ENV=production npm start
     healthCheckPath: /api/health
     autoDeployTrigger: commit
+    envVars:
+      - key: SEED_DEMO_ACCOUNT
+        value: "true"

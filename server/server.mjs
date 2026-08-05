@@ -11,6 +11,7 @@ const distDirectory = fileURLToPath(new URL("../dist/", import.meta.url));
 const port = Number(process.env.PORT ?? 3000);
 const allowedOrigins = (process.env.CORS_ORIGIN ?? "http://localhost:5173,http://127.0.0.1:5173,https://localhost,capacitor://localhost").split(",").map((origin) => origin.trim()).filter(Boolean);
 const isProduction = process.env.NODE_ENV === "production";
+const seedDemoAccount = !isProduction || process.env.SEED_DEMO_ACCOUNT === "true";
 const exposeResetToken = !isProduction && process.env.EXPOSE_RESET_TOKEN === "true";
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const contentTypes = { ".css": "text/css; charset=utf-8", ".html": "text/html; charset=utf-8", ".ico": "image/x-icon", ".js": "text/javascript; charset=utf-8", ".json": "application/json; charset=utf-8", ".png": "image/png", ".svg": "image/svg+xml", ".webmanifest": "application/manifest+json" };
@@ -640,7 +641,7 @@ async function handle(request, response) {
 await loadData();
 if (!workspaces.has("demo-workspace")) workspaces.set("demo-workspace", { id: "demo-workspace", name: "Northgate Senior High School", createdAt: Date.now() });
 if (!workspaceSettings.has("demo-workspace")) workspaceSettings.set("demo-workspace", { workspaceId: "demo-workspace", schoolName: "Northgate Senior High School", schoolYear: "2026–2027", timezone: "Asia/Manila", classStart: "07:00", lateCutoff: "07:15", absentCutoff: "08:00", dismissal: "16:30", channels: { sms: true, push: true, email: true, adviser: false } });
-if (!isProduction && !users.has("demo-admin")) {
+if (seedDemoAccount && !users.has("demo-admin")) {
   const demoPassword = await hashPassword("DemoPassword123!");
   users.set("demo-admin", { id: "demo-admin", workspaceId: "demo-workspace", name: "Marisol Duran", email: "m.duran@northgate.edu.ph", passwordHash: demoPassword, schoolName: "Northgate Senior High School", role: "School Administrator" });
   await saveData();
@@ -666,7 +667,7 @@ const server = createServer((request, response) => {
 
 server.listen(port, "0.0.0.0", () => {
   console.log(`AGILA API listening on http://0.0.0.0:${port}`);
-  if (!isProduction) console.log("Demo login: m.duran@northgate.edu.ph / DemoPassword123!");
+  if (seedDemoAccount) console.log("Demo login: m.duran@northgate.edu.ph / DemoPassword123!");
 });
 
 function shutdown(signal) {
