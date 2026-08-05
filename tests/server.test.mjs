@@ -28,8 +28,8 @@ async function startServer() {
   };
 }
 
-async function request(baseUrl, path, { method = "GET", body, cookie } = {}) {
-  const response = await fetch(`${baseUrl}${path}`, { method, headers: { "content-type": "application/json", ...(cookie ? { cookie } : {}) }, body: body ? JSON.stringify(body) : undefined });
+async function request(baseUrl, path, { method = "GET", body, cookie, bearer } = {}) {
+  const response = await fetch(`${baseUrl}${path}`, { method, headers: { "content-type": "application/json", ...(cookie ? { cookie } : {}), ...(bearer ? { authorization: `Bearer ${bearer}` } : {}) }, body: body ? JSON.stringify(body) : undefined });
   const payload = response.status === 204 ? undefined : await response.json();
   return { response, payload, cookie: response.headers.get("set-cookie")?.split(";")[0] };
 }
@@ -38,6 +38,9 @@ async function register(baseUrl, schoolName) {
   const result = await request(baseUrl, "/auth/register", { method: "POST", body: { name: `${schoolName} Admin`, email: `${schoolName.replace(/\s/g, "").toLowerCase()}-${Date.now()}@example.test`, password: "SecurePassword123!", schoolName } });
   assert.equal(result.response.status, 201);
   assert.ok(result.cookie);
+  assert.equal(typeof result.payload.accessToken, "string");
+  const session = await request(baseUrl, "/auth/me", { bearer: result.payload.accessToken });
+  assert.equal(session.response.status, 200);
   return result.cookie;
 }
 

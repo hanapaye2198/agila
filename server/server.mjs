@@ -315,7 +315,7 @@ async function handle(request, response) {
       if (!user || !(await verifyPassword(String(body.password ?? ""), user.passwordHash))) return fail(response, 401, "Invalid email or password", "INVALID_CREDENTIALS");
       loginAttempts.delete(request.socket.remoteAddress ?? "unknown");
       const token = createSession(user.id, body.remember === true);
-      return send(response, 200, { user: publicUser(user) }, { "Set-Cookie": sessionCookie(token, body.remember === true) });
+      return send(response, 200, { user: publicUser(user), accessToken: token }, { "Set-Cookie": sessionCookie(token, body.remember === true) });
     }
 
     if (request.method === "POST" && path === "/auth/register") {
@@ -323,7 +323,7 @@ async function handle(request, response) {
       const body = await readJson(request);
       const user = await createUser(body);
       const token = createSession(user.id, false);
-      return send(response, 201, { user: publicUser(user) }, { "Set-Cookie": sessionCookie(token, false) });
+      return send(response, 201, { user: publicUser(user), accessToken: token }, { "Set-Cookie": sessionCookie(token, false) });
     }
 
     if (request.method === "GET" && path === "/auth/me") {
