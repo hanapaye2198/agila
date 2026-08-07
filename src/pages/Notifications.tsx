@@ -5,16 +5,53 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { notificationPermission, requestNotificationPermission, type NotificationPermission } from "@/lib/notification-permissions";
 import { workspaceApi, type NotificationItem, type WorkspaceSettings } from "@/lib/workspace-api";
 
-function Item({ item }: { item: NotificationItem }) { const Icon = item.type === "alert" ? TriangleAlert : item.type === "success" ? CheckCircle2 : Info; return <div className={`flex gap-4 rounded-2xl border p-4 ${item.unread ? "border-emerald/30 bg-emerald-soft/40" : "border-border/70 bg-surface"}`}><Icon className="size-5 shrink-0" /><div className="min-w-0 flex-1"><p className="font-semibold">{item.title}</p><p className="mt-1 text-sm text-muted-foreground">{item.body}</p><p className="mt-1 text-xs text-muted-foreground">{new Date(item.createdAt).toLocaleString()}</p></div></div>; }
+function Item({ item }: { item: NotificationItem }) {
+  const Icon = item.type === "alert" ? TriangleAlert : item.type === "success" ? CheckCircle2 : Info;
+  return <div className={`flex gap-4 rounded-2xl border p-4 ${item.unread ? "border-emerald/30 bg-emerald-soft/40" : "border-border/70 bg-surface"}`}><Icon className="size-5 shrink-0" /><div className="min-w-0 flex-1"><p className="font-semibold">{item.title}</p><p className="mt-1 text-sm text-muted-foreground">{item.body}</p><p className="mt-1 text-xs text-muted-foreground">{new Date(item.createdAt).toLocaleString()}</p></div></div>;
+}
 
 export default function NotificationsPage() {
-  const [items, setItems] = useState<NotificationItem[]>([]); const [channels, setChannels] = useState<WorkspaceSettings["channels"]>({ sms: true, push: true, email: true, adviser: false }); const [message, setMessage] = useState("");
-  const load = async () => { try { const result = await workspaceApi.notifications(); setItems(result.notifications); setChannels(result.settings); } catch (error) { setMessage(error instanceof Error ? error.message : "Unable to load notifications"); } };
-  useEffect(() => { void load(); }, []);
-  const saveChannels = async (key: keyof typeof channels, value: boolean) => { const next = { ...channels, [key]: value }; setChannels(next); try { await workspaceApi.saveSettings({ channels: next }); } catch (error) { setMessage(error instanceof Error ? error.message : "Unable to save channel"); } };
+  const [items, setItems] = useState<NotificationItem[]>([]);
+  const [channels, setChannels] = useState<WorkspaceSettings["channels"]>({ sms: true, push: true, email: true, adviser: false });
+  const [message, setMessage] = useState("");
+  const [permission, setPermission] = useState<NotificationPermission>("unsupported");
+
+  const load = async () => {
+    try {
+      const result = await workspaceApi.notifications();
+      setItems(result.notifications);
+      setChannels(result.settings);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to load notifications");
+    }
+  };
+
+  useEffect(() => {
+    void load();
+    void notificationPermission().then(setPermission);
+  }, []);
+
+  const saveChannels = async (key: keyof typeof channels, value: boolean) => {
+    const next = { ...channels, [key]: value };
+    setChannels(next);
+    try {
+      await workspaceApi.saveSettings({ channels: next });
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to save channel");
+    }
+  };
+
+  const requestPermission = async () => {
+    const result = await requestNotificationPermission();
+    setPermission(result);
+    setMessage(result === "granted" ? "Notifications are enabled on this device." : result === "denied" ? "Notifications are blocked. Enable them in Android app settings." : "Notification permission is available in the Android app.");
+  };
+
   const markAllRead = async () => { await workspaceApi.markNotificationsRead(); await load(); };
   const unread = items.filter((item) => item.unread).length;
-  return <AppShell title="Notifications" description={`${unread} unread · live workspace activity`} actions={<><Button variant="outline" className="rounded-xl bg-surface" onClick={() => void markAllRead()}><CheckCheck className="size-4" /> Mark all read</Button><Button className="rounded-xl" onClick={() => setMessage("Alert rules are configured through the delivery channels.")}><Settings2 className="size-4" /> Alert rules</Button></>}><div className="grid gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]"><Card className="rounded-2xl border-border/70 shadow-card"><CardContent className="p-5"><Tabs defaultValue="all"><TabsList className="w-full justify-start rounded-xl"><TabsTrigger value="all">All</TabsTrigger><TabsTrigger value="unread">Unread</TabsTrigger><TabsTrigger value="alerts">Alerts</TabsTrigger></TabsList><TabsContent value="all" className="mt-4 space-y-3">{items.map((item) => <Item key={item.id} item={item} />)}</TabsContent><TabsContent value="unread" className="mt-4 space-y-3">{items.filter((item) => item.unread).map((item) => <Item key={item.id} item={item} />)}</TabsContent><TabsContent value="alerts" className="mt-4 space-y-3">{items.filter((item) => item.type === "alert").map((item) => <Item key={item.id} item={item} />)}</TabsContent></Tabs></CardContent></Card><div className="space-y-4"><Card className="rounded-2xl border-border/70 shadow-card"><CardHeader><CardTitle className="font-display text-base">Delivery channels</CardTitle></CardHeader><CardContent className="space-y-3">{([['sms', 'SMS to guardians'], ['push', 'Mobile push'], ['email', 'Email digest'], ['adviser', 'Adviser reminders']] as const).map(([key, label]) => <div key={key} className="flex items-center gap-3 rounded-xl border border-border/70 px-4 py-3"><span className="flex-1 text-sm font-medium">{label}</span><Switch checked={channels[key]} onCheckedChange={(value) => void saveChannels(key, value)} /></div>)}</CardContent></Card><Card className="rounded-2xl border-none bg-navy text-navy-foreground"><CardContent className="p-5"><BellRing className="size-6" /><p className="mt-3 font-display text-2xl font-bold">{items.length}</p><p className="text-sm opacity-70">Recorded workspace notifications</p>{message && <p className="mt-3 text-xs opacity-70">{message}</p>}</CardContent></Card></div></div></AppShell>;
+
+  return <AppShell title="Notifications" description={`${unread} unread · live workspace activity`} actions={<><Button variant="outline" className="rounded-xl bg-surface" onClick={() => void markAllRead()}><CheckCheck className="size-4" /> Mark all read</Button><Button className="rounded-xl" onClick={() => setMessage("Alert rules are configured through the delivery channels.")}><Settings2 className="size-4" /> Alert rules</Button></>}><div className="grid gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]"><Card className="rounded-2xl border-border/70 shadow-card"><CardContent className="p-5"><Tabs defaultValue="all"><TabsList className="w-full justify-start rounded-xl"><TabsTrigger value="all">All</TabsTrigger><TabsTrigger value="unread">Unread</TabsTrigger><TabsTrigger value="alerts">Alerts</TabsTrigger></TabsList><TabsContent value="all" className="mt-4 space-y-3">{items.map((item) => <Item key={item.id} item={item} />)}</TabsContent><TabsContent value="unread" className="mt-4 space-y-3">{items.filter((item) => item.unread).map((item) => <Item key={item.id} item={item} />)}</TabsContent><TabsContent value="alerts" className="mt-4 space-y-3">{items.filter((item) => item.type === "alert").map((item) => <Item key={item.id} item={item} />)}</TabsContent></Tabs></CardContent></Card><div className="space-y-4"><Card className="rounded-2xl border-border/70 shadow-card"><CardHeader><CardTitle className="font-display text-base">Delivery channels</CardTitle></CardHeader><CardContent className="space-y-3">{([['sms', 'SMS to guardians'], ['push', 'Mobile push'], ['email', 'Email digest'], ['adviser', 'Adviser reminders']] as const).map(([key, label]) => <div key={key} className="flex items-center gap-3 rounded-xl border border-border/70 px-4 py-3"><span className="flex-1 text-sm font-medium">{label}</span><Switch checked={channels[key]} onCheckedChange={(value) => void saveChannels(key, value)} /></div>)}{permission !== "unsupported" && <Button className="mt-2 w-full rounded-xl" variant={permission === "granted" ? "outline" : "default"} disabled={permission === "granted"} onClick={() => void requestPermission()}><BellRing className="size-4" /> {permission === "granted" ? "Notifications enabled" : "Allow notifications"}</Button>}</CardContent></Card><Card className="rounded-2xl border-none bg-navy text-navy-foreground"><CardContent className="p-5"><BellRing className="size-6" /><p className="mt-3 font-display text-2xl font-bold">{items.length}</p><p className="text-sm opacity-70">Recorded workspace notifications</p>{message && <p className="mt-3 text-xs opacity-70">{message}</p>}</CardContent></Card></div></div></AppShell>;
 }

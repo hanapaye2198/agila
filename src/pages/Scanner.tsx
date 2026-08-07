@@ -1,6 +1,9 @@
 
 import { useEffect, useRef, useState } from "react";
-import { Camera, CameraOff, CheckCircle2, Keyboard, RefreshCw, ScanLine, Wifi } from "lucide-react";
+import { createPortal } from "react-dom";
+import { Camera, CameraOff, CheckCircle2, Keyboard, RefreshCw, ScanLine, Wifi, X } from "lucide-react";
+import { Capacitor } from "@capacitor/core";
+import { BarcodeFormat, BarcodeScanner } from "@capacitor-mlkit/barcode-scanning";
 
 import { AppShell } from "@/components/agila/app-shell";
 import { Badge } from "@/components/ui/badge";
@@ -59,6 +62,7 @@ export default function ScannerPage() {
   const detectorRef = useRef<BarcodeDetectorInstance | null>(null);
   const scanInFlight = useRef(false);
   const frameRef = useRef<number | undefined>(undefined);
+  const nativeListenerRef = useRef<{ remove: () => Promise<void> } | null>(null);
   const recentCameraCodes = useRef(new Map<string, number>());
   const selectedDevice = devices.find((device) => device.id === (session?.gateId ?? gateId));
 
@@ -87,11 +91,55 @@ export default function ScannerPage() {
     streamRef.current = null;
     detectorRef.current = null;
     if (videoRef.current) videoRef.current.srcObject = null;
+    if (Capacitor.isNativePlatform()) {
+      document.body.classList.remove("barcode-scanner-active");
+      void nativeListenerRef.current?.remove().catch(() => undefined);
+      nativeListenerRef.current = null;
+      void BarcodeScanner.stopScan().catch(() => undefined);
+    }
     setCameraActive(false);
   }
 
   async function startCamera() {
     if (!session) { setError("Start a scanner session before opening the camera."); return; }
+    // Use the bundled ML Kit camera pipeline on native builds. Unlike scan(),
+    // startScan() does not rely on the Play Services code-scanner module.
+    if (Capacitor.isNativePlatform()) {
+      setCameraError(""); setError("");
+      try {
+        const supported = await BarcodeScanner.isSupported();
+        if (!supported.supported) throw new Error("This device has no supported camera.");
+        const permission = await BarcodeScanner.requestPermissions();
+        if (permission.camera !== "granted") throw new Error("Camera permission is required to scan QR codes.");
+        let listener: { remove: () => Promise<void> } | undefined;
+        listener = await BarcodeScanner.addListener("barcodesScanned", async ({ barcodes }) => {
+          const barcode = barcodes[0];
+          if (!barcode) return;
+          const value = barcode.rawValue?.trim() || barcode.displayValue?.trim();
+          if (!value || scanInFlight.current) return;
+          scanInFlight.current = true;
+          await listener?.remove();
+          nativeListenerRef.current = null;
+          await BarcodeScanner.stopScan();
+          document.body.classList.remove("barcode-scanner-active");
+          setCameraActive(false);
+          setIdentifier(value);
+          await logScan(value);
+          scanInFlight.current = false;
+        });
+        nativeListenerRef.current = listener;
+        // ML Kit renders its preview behind the WebView. This class makes the
+        // WebView transparent so the actual native camera preview is visible.
+        document.body.classList.add("barcode-scanner-active");
+        setCameraActive(true);
+        await BarcodeScanner.startScan({ formats: [BarcodeFormat.QrCode] });
+      } catch (cause) {
+        stopCamera();
+        scanInFlight.current = false;
+        setCameraError(cause instanceof Error ? `Camera unavailable: ${cause.message}` : "Unable to scan the QR code.");
+      }
+      return;
+    }
     if (!navigator.mediaDevices?.getUserMedia) { setCameraError("This browser does not support camera access."); return; }
     if (!window.BarcodeDetector) { setCameraError("QR detection is unavailable in this browser. Use Chrome or Edge, or enter the LRN manually."); return; }
     setCameraError(""); setError("");
@@ -211,7 +259,8 @@ export default function ScannerPage() {
   }
 
   return (
-    <AppShell
+    <>
+      <AppShell
       title="QR Scanner"
       description={`${selectedDevice?.gate ?? "Scanner"} console · ${session ? "Session active" : "No active session"}`}
       actions={
@@ -377,6 +426,27 @@ export default function ScannerPage() {
           </Card>
         </div>
       </div>
-    </AppShell>
+      </AppShell>
+      {cameraActive && Capacitor.isNativePlatform() && createPortal(
+        <div className="native-scan-overlay" role="dialog" aria-modal="true" aria-label="QR code scanner">
+          <div className="native-scan-shade native-scan-shade-top" />
+          <div className="native-scan-shade native-scan-shade-bottom" />
+          <div className="native-scan-shade native-scan-shade-left" />
+          <div className="native-scan-shade native-scan-shade-right" />
+          <div className="native-scan-frame" aria-hidden="true">
+            <span className="native-scan-corner native-scan-corner-tl" />
+            <span className="native-scan-corner native-scan-corner-tr" />
+            <span className="native-scan-corner native-scan-corner-bl" />
+            <span className="native-scan-corner native-scan-corner-br" />
+            <span className="native-scan-line" />
+          </div>
+          <p className="native-scan-title">Align the learner QR code inside the frame</p>
+          <button type="button" className="native-scan-cancel" onClick={stopCamera}>
+            <X className="size-4" /> Cancel
+          </button>
+        </div>,
+        document.body,
+      )}
+    </>
   );
 }

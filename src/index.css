@@ -118,6 +118,56 @@
   --chart-5: oklch(0.62 0.09 250);
 }
 
+/* The Capacitor ML Kit scanner renders the camera beneath the WebView. */
+body.barcode-scanner-active,
+body.barcode-scanner-active #root {
+  background: transparent !important;
+}
+
+body.barcode-scanner-active #root {
+  visibility: hidden;
+}
+
+.native-scan-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  color: white;
+  pointer-events: none;
+}
+
+.native-scan-shade {
+  position: absolute;
+  background: rgb(0 0 0 / 55%);
+}
+
+.native-scan-shade-top { inset: 0 0 auto; height: calc(50% - min(36vw, 172px)); }
+.native-scan-shade-bottom { inset: calc(50% + min(36vw, 172px)) 0 0; }
+.native-scan-shade-left { inset: calc(50% - min(36vw, 172px)) auto calc(50% - min(36vw, 172px)) 0; width: calc(50% - min(36vw, 172px)); }
+.native-scan-shade-right { inset: calc(50% - min(36vw, 172px)) 0 calc(50% - min(36vw, 172px)) auto; width: calc(50% - min(36vw, 172px)); }
+
+.native-scan-frame {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: min(72vw, 344px);
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  border: 2px solid rgb(110 231 183 / 70%);
+  border-radius: 20px;
+}
+
+.native-scan-corner { position: absolute; width: 34px; height: 34px; border-color: #6ee7b7; border-style: solid; border-width: 0; }
+.native-scan-corner-tl { left: -3px; top: -3px; border-left-width: 5px; border-top-width: 5px; border-radius: 14px 0 0; }
+.native-scan-corner-tr { right: -3px; top: -3px; border-right-width: 5px; border-top-width: 5px; border-radius: 0 14px 0 0; }
+.native-scan-corner-bl { bottom: -3px; left: -3px; border-bottom-width: 5px; border-left-width: 5px; border-radius: 0 0 0 14px; }
+.native-scan-corner-br { right: -3px; bottom: -3px; border-right-width: 5px; border-bottom-width: 5px; border-radius: 0 0 14px; }
+.native-scan-line { position: absolute; left: 8%; right: 8%; top: 50%; height: 2px; background: #6ee7b7; box-shadow: 0 0 16px #6ee7b7; animation: native-scan-line 1.8s ease-in-out infinite; }
+.native-scan-title { position: absolute; left: 24px; right: 24px; top: calc(50% + min(36vw, 172px) + 24px); text-align: center; font-size: 14px; font-weight: 600; text-shadow: 0 1px 3px black; }
+.native-scan-cancel { position: absolute; left: 50%; bottom: max(32px, env(safe-area-inset-bottom)); transform: translateX(-50%); display: inline-flex; align-items: center; gap: 8px; border: 1px solid rgb(255 255 255 / 35%); border-radius: 999px; background: rgb(0 0 0 / 65%); padding: 12px 18px; color: white; font-size: 14px; font-weight: 600; pointer-events: auto; }
+
+@keyframes native-scan-line { 0%, 100% { transform: translateY(-72px); opacity: .65; } 50% { transform: translateY(72px); opacity: 1; } }
+
 @layer base {
   * {
     border-color: var(--color-border);

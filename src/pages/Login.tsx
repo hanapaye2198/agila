@@ -49,6 +49,9 @@ export default function LoginPage() {
       }
     >
       <form className="space-y-5" onSubmit={handleSubmit}>
+        <p className="rounded-xl bg-muted px-3 py-2 text-xs text-muted-foreground">
+          Demo account: <strong>m.duran@northgate.edu.ph</strong> / <strong>DemoPassword123!</strong>
+        </p>
         {notice ? <p role="status" className="rounded-2xl bg-emerald-soft p-3 text-sm text-accent-foreground">{notice}</p> : null}
         <div className="space-y-2">
           <Label htmlFor="email">School email</Label>

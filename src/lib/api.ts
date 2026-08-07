@@ -1,4 +1,5 @@
 export type ApiError = Error & { status?: number; code?: string; details?: unknown };
+import { offlineRequest } from "@/lib/offline-api";
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "/api").replace(/\/$/, "");
 // Render free instances can take roughly a minute to wake after inactivity.
@@ -30,6 +31,9 @@ function abortError() {
 }
 
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  // The mobile build is deliberately local-first while the hosted API is paused.
+  return offlineRequest<T>(path, options);
+  /*
   const { timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS, signal, ...requestOptions } = options;
   const token = getStoredToken();
   const headers = new Headers(options.headers);
@@ -92,7 +96,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
     throw error;
   }
 
-  return payload as T;
+  return payload as T; */
 }
 
 export type AuthUser = {
